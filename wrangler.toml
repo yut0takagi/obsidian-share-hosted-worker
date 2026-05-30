@@ -1,0 +1,5 @@
+name = "obsidian-share-hosted-worker"
+main = "src/index.ts"
+compatibility_date = "2026-05-30"
+
+# D1 and R2 bindings will be added by Task W2 / W3.

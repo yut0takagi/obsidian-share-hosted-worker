@@ -1,0 +1,26 @@
+{
+  "name": "obsidian-share-hosted-worker",
+  "version": "0.1.0",
+  "description": "Hosted multi-tenant backend for obsidian-share-hosted plugin",
+  "license": "MIT",
+  "author": "Yuto Takagi",
+  "private": false,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "db:init:local": "wrangler d1 execute share-hosted --local --file=src/db/schema.sql",
+    "db:init:prod": "wrangler d1 execute share-hosted --remote --file=src/db/schema.sql"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240329.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.2.0",
+    "wrangler": "^3.40.0"
+  },
+  "dependencies": {
+    "hono": "^4.1.0",
+    "jose": "^5.2.0"
+  }
+}
