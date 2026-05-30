@@ -6,4 +6,7 @@ compatibility_date = "2026-05-30"
 binding = "R2"
 bucket_name = "share-hosted"
 
-# D1 binding will be added by Task W3.
+[[d1_databases]]
+binding = "DB"
+database_name = "share-hosted"
+database_id = "98673ca8-83fa-4681-ba82-245c2b1f00ad"
