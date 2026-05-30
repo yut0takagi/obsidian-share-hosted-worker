@@ -3,6 +3,7 @@ import { Hono } from 'hono'
 import * as q from '../db/queries'
 import { userId, sessionToken, magicToken } from '../db/nanoid'
 import { sendMagicLinkEmail } from '../email/mailchannels'
+import { sessionMiddleware } from '../auth/sessionMiddleware'
 
 type Bindings = {
   DB: D1Database
@@ -10,7 +11,7 @@ type Bindings = {
   MAILCHANNELS_FROM_NAME: string
 }
 
-const route = new Hono<{ Bindings: Bindings }>()
+const route = new Hono<{ Bindings: Bindings; Variables: { session: any; userId: string } }>()
 
 const EMAIL_RE = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i
 const CALLBACK_RE = /^obsidian:\/\//
@@ -88,6 +89,31 @@ route.get('/auth/verify', async (c) => {
   callback.searchParams.set('api_token', sToken)
   callback.searchParams.set('email', user.email)
   return c.redirect(callback.toString(), 302)
+})
+
+route.get('/auth/me', sessionMiddleware, async (c) => {
+  const userIdVar = c.get('userId')
+  const user = await q.findUserById(c.env.DB, userIdVar)
+  if (!user) return c.json({ error: 'user not found' }, 404)
+  return c.json({ user })
+})
+
+route.patch('/auth/me', sessionMiddleware, async (c) => {
+  let body: { default_org_domain?: string | null; default_owner_name?: string | null }
+  try { body = await c.req.json() } catch { return c.json({ error: 'invalid json' }, 400) }
+  const userIdVar = c.get('userId')
+  await q.updateUserProfile(c.env.DB, userIdVar, {
+    default_org_domain: body.default_org_domain ?? null,
+    default_owner_name: body.default_owner_name ?? null,
+  })
+  const user = await q.findUserById(c.env.DB, userIdVar)
+  return c.json({ user })
+})
+
+route.post('/auth/logout', sessionMiddleware, async (c) => {
+  const session = c.get('session')
+  await q.deleteSession(c.env.DB, session.token)
+  return c.body(null, 204)
 })
 
 export default route
