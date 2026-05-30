@@ -10,3 +10,7 @@ bucket_name = "share-hosted"
 binding = "DB"
 database_name = "share-hosted"
 database_id = "98673ca8-83fa-4681-ba82-245c2b1f00ad"
+
+[vars]
+MAILCHANNELS_FROM = "noreply@obsidian-share-hosted-worker.takachanman-jp.workers.dev"
+MAILCHANNELS_FROM_NAME = "Share Hosted"
