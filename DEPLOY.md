@@ -93,6 +93,22 @@ no other note uses. Images are kept when:
 Images uploaded before the upgrade are never deleted automatically, even after re-sharing,
 because notes stored by 0.1.0 may still point at them without a recorded reference.
 
+### Rollbacks and mixed versions: `ASSET_CLEANUP=off`
+
+Only the 0.2.0 Worker records which notes use which images. While an older Worker serves
+traffic (a rollback, or old and new versions running side by side during a gradual
+deployment), shares it writes have no references, and the 0.2.0 code could later delete an
+image such a share still shows. Before rolling back or running versions side by side, set
+
+```toml
+[vars]
+ASSET_CLEANUP = "off"
+```
+
+and deploy. Shares and stops keep working and references keep being recorded; only image
+deletion stops. Turn it back on once a single 0.2.0 version serves all traffic again;
+images released while it was off stay in R2.
+
 ### Expired notes (optional cron)
 
 Expired links already answer `410`. To also remove their files, the Worker exports a

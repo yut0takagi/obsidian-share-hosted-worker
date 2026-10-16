@@ -1,7 +1,7 @@
 // src/routes/share.ts
 import { Hono } from 'hono'
 import { putMeta, putHtml, getMeta } from '../r2'
-import { recordNoteAssets, removeNote } from '../assetRefs'
+import { addNoteAssets, pruneNoteAssets, extractAssetKeys, removeNote } from '../assetRefs'
 import { sessionMiddleware } from '../auth/sessionMiddleware'
 import { noteUuid } from '../db/nanoid'
 import * as q from '../db/queries'
@@ -10,7 +10,7 @@ import { declaredTooLarge } from '../util/bodySize'
 import { orgDomainFor, parseExtraFreeMailDomains } from '../auth/orgDomain'
 import type { NoteMeta, ShareResponse } from '../types'
 
-type Bindings = { R2: R2Bucket; DB: D1Database; EXTRA_FREE_MAIL_DOMAINS?: string }
+type Bindings = { R2: R2Bucket; DB: D1Database; EXTRA_FREE_MAIL_DOMAINS?: string; ASSET_CLEANUP?: string }
 type Vars = { session: any; userId: string }
 
 const route = new Hono<{ Bindings: Bindings; Variables: Vars }>()
@@ -78,9 +78,12 @@ route.post('/api/share', sessionMiddleware, async (c) => {
     owner_email: user.email,
   }
 
+  // Reference new images first, publish, then let go of images the note stopped using.
+  const assetKeys = extractAssetKeys(req.html)
+  await addNoteAssets(c.env, uuid, assetKeys)
   await putMeta(c.env.R2, uuid, meta)
   await putHtml(c.env.R2, uuid, req.html)
-  await recordNoteAssets(c.env, uuid, req.html, new Date())
+  await pruneNoteAssets(c.env, uuid, assetKeys, new Date())
 
   const host = new URL(c.req.url).origin
   const path = req.mode === 'public' ? `/p/${uuid}` : `/n/${uuid}`

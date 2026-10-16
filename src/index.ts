@@ -18,6 +18,7 @@ type Bindings = {
   EXTRA_FREE_MAIL_DOMAINS?: string
   SIGN_IN_PER_IP_PER_HOUR?: string
   MAIL_DAILY_LIMIT?: string
+  ASSET_CLEANUP?: string
 }
 
 const app = new Hono<{ Bindings: Bindings }>()

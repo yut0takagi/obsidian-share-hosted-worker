@@ -4,7 +4,7 @@ import { sessionMiddleware } from '../auth/sessionMiddleware'
 import { putAsset, getAsset, headAsset } from '../r2'
 import { checkAssetUpload, parseAssetFilename, ASSET_CSP, MAX_ASSET_BYTES } from '../assets'
 import { declaredTooLarge } from '../util/bodySize'
-import { claimAsset } from '../assetRefs'
+import { claimAsset, markLegacyAsset } from '../assetRefs'
 
 type Bindings = { R2: R2Bucket; DB: D1Database }
 type Vars = { session: any; userId: string }
@@ -17,13 +17,15 @@ route.post('/api/asset', sessionMiddleware, async (c) => {
   const check = await checkAssetUpload(c.req.query('hash'), c.req.query('ext'), body)
   if (!check.ok) return c.text(`Bad Request: ${check.error}`, check.status)
 
+  // Claim before looking at R2, so a clean-up running now cannot remove what we rely on.
+  const created = await claimAsset(c.env.DB, check.key, new Date())
   // Same key + verified bytes means same content, so an existing verified object is left alone.
   const existing = await headAsset(c.env.R2, check.key)
   if (!existing || existing.sha256 !== check.sha256) {
     await putAsset(c.env.R2, check.key, body, check.contentType, check.sha256)
   }
   // Objects already in R2 without a row predate reference tracking and are kept forever.
-  await claimAsset(c.env.DB, check.key, new Date(), existing !== null)
+  if (created && existing) await markLegacyAsset(c.env.DB, check.key)
 
   const [hash, ext] = check.key.split('.')
   return c.json({ hash, ext, url: `/a/${check.key}` })

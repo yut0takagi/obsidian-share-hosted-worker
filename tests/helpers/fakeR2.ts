@@ -28,8 +28,13 @@ function view(key: string, o: StoredObject) {
 export class FakeR2 {
   objects = new Map<string, StoredObject>()
   putCount = 0
+  /** Test hook: return true to make put() of this key throw. */
+  failPut: (key: string) => boolean = () => false
+  /** Test hook: runs before each key is deleted, to interleave other requests. */
+  beforeDelete: (key: string) => Promise<void> = async () => {}
 
   async put(key: string, value: unknown, opts: { httpMetadata?: { contentType?: string }; customMetadata?: Record<string, string> } = {}) {
+    if (this.failPut(key)) throw new Error(`FakeR2: put failed for ${key}`)
     const o: StoredObject = {
       body: toBytes(value),
       httpMetadata: { ...(opts.httpMetadata ?? {}) },
@@ -58,7 +63,10 @@ export class FakeR2 {
   }
 
   async delete(keys: string | string[]) {
-    for (const k of Array.isArray(keys) ? keys : [keys]) this.objects.delete(k)
+    for (const k of Array.isArray(keys) ? keys : [keys]) {
+      await this.beforeDelete(k)
+      this.objects.delete(k)
+    }
   }
 
   async list(opts: { prefix?: string; cursor?: string; limit?: number } = {}) {

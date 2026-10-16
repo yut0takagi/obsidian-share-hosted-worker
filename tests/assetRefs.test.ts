@@ -137,3 +137,63 @@ describe('sweepExpiredNotes', () => {
     expect(env.r2.objects.has('notes/legacy1.html')).toBe(false)
   })
 })
+
+describe('ordering and races', () => {
+  it('publishes nothing if the new image references cannot be recorded', async () => {
+    const k = await upload(IMG1)
+    const realPrepare = env.DB.prepare.bind(env.DB)
+    ;(env.DB as any).prepare = (sql: string) => {
+      if (sql.startsWith('INSERT OR IGNORE INTO note_assets')) throw new Error('D1 down')
+      return realPrepare(sql)
+    }
+    const res = await app().request('/api/share', {
+      method: 'POST',
+      headers: { ...bearer(alice.token), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uuid: null, mode: 'public', title: 't', source_path: 't.md', html: `<img src="/a/${k}">` }),
+    }, env, makeCtx())
+    expect(res.status).toBe(500)
+    expect([...env.r2.objects.keys()].filter((key) => key.startsWith('notes/'))).toEqual([])
+  })
+
+  it('keeps the images the old version used when writing the new version fails', async () => {
+    const k1 = await upload(IMG1)
+    const k2 = await upload(IMG2)
+    const uuid = await share([k1])
+    age(k1)
+    env.r2.failPut = (key) => key === `notes/${uuid}.html`
+    const res = await app().request('/api/share', {
+      method: 'POST',
+      headers: { ...bearer(alice.token), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uuid, mode: 'public', title: 't', source_path: 't.md', html: `<img src="/a/${k2}">` }),
+    }, env, makeCtx())
+    expect(res.status).toBe(500)
+    expect(stored(k1)).toBe(true)
+    expect(env.db.rows('SELECT asset_key FROM note_assets WHERE note_uuid = ? AND asset_key = ?', uuid, k1)).toHaveLength(1)
+  })
+
+  it('keeps an image that someone uploads again while it is being cleaned up', async () => {
+    const k = await upload(IMG1)
+    const uuid = await share([k])
+    age(k)
+    let raced = false
+    env.r2.beforeDelete = async (key) => {
+      if (key !== `assets/${k}` || raced) return
+      raced = true
+      await upload(IMG1)
+    }
+    await stop(uuid)
+    expect(raced).toBe(true)
+    expect(stored(k)).toBe(true)
+    expect(env.db.rows('SELECT key FROM assets WHERE key = ?', k)).toHaveLength(1)
+  })
+
+  it('does not delete images while ASSET_CLEANUP is "off"', async () => {
+    env.ASSET_CLEANUP = 'off'
+    const k = await upload(IMG1)
+    const uuid = await share([k])
+    age(k)
+    await stop(uuid)
+    expect(stored(k)).toBe(true)
+    expect(env.r2.objects.has(`notes/${uuid}.json`)).toBe(false)
+  })
+})
