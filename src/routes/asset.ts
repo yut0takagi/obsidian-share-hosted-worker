@@ -3,6 +3,7 @@ import { Hono } from 'hono'
 import { sessionMiddleware } from '../auth/sessionMiddleware'
 import { putAsset, getAsset, headAsset } from '../r2'
 import { checkAssetUpload, parseAssetFilename, ASSET_CSP } from '../assets'
+import { claimAsset } from '../assetRefs'
 
 type Bindings = { R2: R2Bucket; DB: D1Database }
 type Vars = { session: any; userId: string }
@@ -19,6 +20,8 @@ route.post('/api/asset', sessionMiddleware, async (c) => {
   if (!existing || existing.sha256 !== check.sha256) {
     await putAsset(c.env.R2, check.key, body, check.contentType, check.sha256)
   }
+  // Objects already in R2 without a row predate reference tracking and are kept forever.
+  await claimAsset(c.env.DB, check.key, new Date(), existing !== null)
 
   const [hash, ext] = check.key.split('.')
   return c.json({ hash, ext, url: `/a/${check.key}` })

@@ -3,6 +3,8 @@ import type { NoteMeta } from './types'
 export async function putMeta(r2: R2Bucket, uuid: string, meta: NoteMeta): Promise<void> {
   await r2.put(`notes/${uuid}.json`, JSON.stringify(meta), {
     httpMetadata: { contentType: 'application/json' },
+    // Lets the expiry sweep list notes without reading each one ('' = never expires).
+    customMetadata: { expires_at: meta.expires_at ?? '' },
   })
 }
 

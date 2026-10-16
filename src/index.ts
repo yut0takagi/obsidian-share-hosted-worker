@@ -4,6 +4,7 @@ import shareRoute from './routes/share'
 import assetRoute from './routes/asset'
 import noteRoute from './routes/note'
 import publicRoute from './routes/public'
+import { sweepExpiredNotes } from './assetRefs'
 
 type Bindings = {
   R2: R2Bucket
@@ -24,4 +25,12 @@ app.route('/', assetRoute)
 app.route('/', noteRoute)
 app.route('/', publicRoute)
 
-export default app
+export { app }
+
+export default {
+  fetch: app.fetch,
+  // Runs only if a cron trigger is configured (see DEPLOY.md).
+  async scheduled(_controller: ScheduledController, env: Bindings, ctx: ExecutionContext) {
+    ctx.waitUntil(sweepExpiredNotes(env, new Date()).then((n) => console.log(`[sweep] removed ${n} expired notes`)))
+  },
+}

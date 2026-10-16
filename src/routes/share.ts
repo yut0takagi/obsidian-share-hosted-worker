@@ -1,6 +1,7 @@
 // src/routes/share.ts
 import { Hono } from 'hono'
-import { putMeta, putHtml, getMeta, deleteNote } from '../r2'
+import { putMeta, putHtml, getMeta } from '../r2'
+import { recordNoteAssets, removeNote } from '../assetRefs'
 import { sessionMiddleware } from '../auth/sessionMiddleware'
 import { noteUuid } from '../db/nanoid'
 import * as q from '../db/queries'
@@ -77,6 +78,7 @@ route.post('/api/share', sessionMiddleware, async (c) => {
 
   await putMeta(c.env.R2, uuid, meta)
   await putHtml(c.env.R2, uuid, req.html)
+  await recordNoteAssets(c.env, uuid, req.html, new Date())
 
   const host = new URL(c.req.url).origin
   const path = req.mode === 'public' ? `/p/${uuid}` : `/n/${uuid}`
@@ -89,7 +91,7 @@ route.delete('/api/share/:uuid', sessionMiddleware, async (c) => {
   const existing = await getMeta(c.env.R2, uuid)
   if (!existing) return c.body(null, 204)
   if (existing.owner_id !== userIdVar) return c.text('Forbidden', 403)
-  await deleteNote(c.env.R2, uuid)
+  await removeNote(c.env, uuid, new Date())
   return c.body(null, 204)
 })
 

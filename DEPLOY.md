@@ -38,3 +38,54 @@ missing, and logs the same list. No sign-in token is created in that case.
 
 If Resend refuses a send, the Worker answers `502`, logs Resend's status, and deletes the
 token it just made so the person can retry without waiting for the 5-minute limit.
+
+## Database migrations
+
+`src/db/schema.sql` is the 0.1.0 baseline. Every later change is a file in `migrations/`,
+applied in order by Wrangler, which records what it has applied in a `d1_migrations` table.
+
+| File | What it does |
+|---|---|
+| `0001_session_expiry.sql` | Adds `sessions.expires_at`. Existing sessions get 30 days from when the migration runs. Adds an index for the sign-in email rate limit. |
+| `0002_asset_refs.sql` | Adds `assets` and `note_assets`, used to delete images when a share stops. |
+
+Both only add columns, tables and indexes, so the 0.1.0 Worker keeps working against a
+migrated database. Apply them **before** deploying the new Worker code, which reads the new
+columns:
+
+```bash
+# existing deployment
+npx wrangler d1 migrations apply share-hosted --remote
+
+# new deployment: baseline first, then the migrations
+npm run db:init:prod
+npx wrangler d1 migrations apply share-hosted --remote
+```
+
+Try them locally first with `--local` instead of `--remote`.
+
+## Image clean-up
+
+When a share stops, or an update no longer shows an image, the Worker deletes images that
+no other note uses. Images are kept when:
+
+- another note still references them (images are shared by content hash),
+- they were already in R2 before reference tracking began (0.1.0 uploads), or
+- someone uploaded the same bytes within the last hour.
+
+Images uploaded before the upgrade are never deleted automatically, even after re-sharing,
+because notes stored by 0.1.0 may still point at them without a recorded reference.
+
+### Expired notes (optional cron)
+
+Expired links already answer `410`. To also remove their files, the Worker exports a
+`scheduled` handler that deletes notes whose expiry passed more than 7 days ago (up to 100
+per run), together with images nothing else uses. It runs only if you add a cron trigger:
+
+```toml
+# wrangler.toml
+[triggers]
+crons = ["17 3 * * *"]   # daily at 03:17 UTC
+```
+
+Then deploy. Without the trigger, expired notes stay in R2 and keep answering `410`.
