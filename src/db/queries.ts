@@ -64,12 +64,6 @@ export async function consumeMagicTokenOnce(db: D1Database, token: string, at: s
   return (r.meta?.changes ?? 0) === 1
 }
 
-export async function latestMagicTokenAt(db: D1Database, email: string): Promise<string | null> {
-  return await db.prepare(
-    'SELECT created_at FROM magic_link_tokens WHERE email = ? ORDER BY created_at DESC LIMIT 1'
-  ).bind(email).first<string>('created_at')
-}
-
 export async function deleteMagicToken(db: D1Database, token: string): Promise<void> {
   await db.prepare('DELETE FROM magic_link_tokens WHERE token = ?').bind(token).run()
 }

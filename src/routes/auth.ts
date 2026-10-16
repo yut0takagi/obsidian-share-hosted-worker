@@ -5,11 +5,12 @@ import { userId, sessionToken, magicToken } from '../db/nanoid'
 import { resolveMailConfig, sendMagicLink, type MailEnv } from '../email/mailer'
 import { sessionMiddleware } from '../auth/sessionMiddleware'
 import { orgDomainFor, parseExtraFreeMailDomains } from '../auth/orgDomain'
-import { sessionExpiresAt, magicLinkRetryAfter } from '../auth/session'
+import { sessionExpiresAt } from '../auth/session'
+import { hit, signInLimits, type SignInLimitEnv } from '../auth/rateLimit'
 import { renderConfirmPage, renderMessagePage, VERIFY_PAGE_HEADERS } from '../auth/verifyPage'
 import { EMAIL_RE, normalizeEmail } from '../util/email'
 
-type Bindings = { DB: D1Database; EXTRA_FREE_MAIL_DOMAINS?: string } & MailEnv
+type Bindings = { DB: D1Database; EXTRA_FREE_MAIL_DOMAINS?: string } & MailEnv & SignInLimitEnv
 
 const route = new Hono<{ Bindings: Bindings; Variables: { session: any; userId: string } }>()
 
@@ -35,10 +36,18 @@ route.post('/auth/request-magic-link', async (c) => {
   }
 
   const now = new Date()
-  const retryAfter = magicLinkRetryAfter(await q.latestMagicTokenAt(c.env.DB, email), now)
-  if (retryAfter > 0) {
-    c.header('Retry-After', String(retryAfter))
-    return c.json({ error: 'rate_limited', message: 'A sign-in link was sent to this address recently. Check your inbox or try again in a few minutes.', retry_after: retryAfter }, 429)
+  const limits = await signInLimits(c.env, email, c.req.header('CF-Connecting-IP') || 'unknown')
+  const checks = [
+    { limit: limits.address, error: 'rate_limited', message: 'A few sign-in links were sent to this address recently. Check your inbox or try again in a few minutes.' },
+    { limit: limits.ip, error: 'rate_limited', message: 'Too many sign-in requests from this network. Try again later.' },
+    { limit: limits.day, error: 'daily_limit', message: 'Sign-in email is paused for today. Try again tomorrow.' },
+  ]
+  for (const { limit, error, message } of checks) {
+    const r = await hit(c.env.DB, limit, now)
+    if (!r.ok) {
+      c.header('Retry-After', String(r.retryAfter))
+      return c.json({ error, message, retry_after: r.retryAfter }, 429)
+    }
   }
 
   // The plugin's state rides on the callback, so the protocol handler gets it back unchanged.

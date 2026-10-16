@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { isSessionExpired, magicLinkRetryAfter, sessionExpiresAt } from '../src/auth/session'
+import { isSessionExpired, sessionExpiresAt } from '../src/auth/session'
 import { FakeD1 } from './helpers/fakeD1'
 
 const NOW = new Date('2026-10-16T00:00:00.000Z')
@@ -17,17 +17,6 @@ describe('isSessionExpired', () => {
 
   it('sets new sessions to expire 30 days out', () => {
     expect(sessionExpiresAt(NOW)).toBe('2026-11-15T00:00:00.000Z')
-  })
-})
-
-describe('magicLinkRetryAfter', () => {
-  it('is 0 without an earlier link or after 5 minutes', () => {
-    expect(magicLinkRetryAfter(null, NOW)).toBe(0)
-    expect(magicLinkRetryAfter('2026-10-15T23:54:59.000Z', NOW)).toBe(0)
-  })
-
-  it('counts the seconds left in the 5-minute window', () => {
-    expect(magicLinkRetryAfter('2026-10-15T23:59:00.000Z', NOW)).toBe(240)
   })
 })
 

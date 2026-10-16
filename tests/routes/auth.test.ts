@@ -22,9 +22,9 @@ beforeEach(() => {
 })
 afterEach(() => { globalThis.fetch = origFetch; vi.useRealTimers() })
 
-async function requestLink(body: Record<string, unknown>) {
+async function requestLink(body: Record<string, unknown>, ip = '192.0.2.1') {
   return app().request('/auth/request-magic-link', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': ip },
     body: JSON.stringify(body),
   }, env, makeCtx())
 }
@@ -92,17 +92,52 @@ describe('POST /auth/request-magic-link', () => {
     expect((await requestLink({ email: 'alice@example.com', callback: CALLBACK })).status).toBe(200)
   })
 
-  it('sends at most one link per address every 5 minutes', async () => {
-    expect((await requestLink({ email: 'alice@example.com', callback: CALLBACK })).status).toBe(200)
+  it('allows 3 links per address from the same place every 15 minutes', async () => {
+    for (let i = 0; i < 3; i++) expect((await requestLink({ email: 'alice@example.com', callback: CALLBACK })).status).toBe(200)
     const again = await requestLink({ email: 'Alice@example.com', callback: CALLBACK })
     expect(again.status).toBe(429)
     expect(Number(again.headers.get('Retry-After'))).toBeGreaterThan(0)
-    expect(globalThis.fetch).toHaveBeenCalledTimes(1)
+    expect(Number(again.headers.get('Retry-After'))).toBeLessThanOrEqual(15 * 60)
+    expect(globalThis.fetch).toHaveBeenCalledTimes(3)
   })
 
-  it('allows another link once 5 minutes have passed', async () => {
-    seedToken('m_old', { created_at: new Date(Date.now() - 6 * 60 * 1000).toISOString() })
+  it('does not let requests from elsewhere use up the owner\'s allowance', async () => {
+    for (let i = 0; i < 4; i++) await requestLink({ email: 'alice@example.com', callback: CALLBACK }, '198.51.100.7')
+    expect((await requestLink({ email: 'alice@example.com', callback: CALLBACK }, '192.0.2.1')).status).toBe(200)
+  })
+
+  it('allows more links in the next 15-minute window', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-10-16T10:00:00Z'))
+    for (let i = 0; i < 3; i++) expect((await requestLink({ email: 'alice@example.com', callback: CALLBACK })).status).toBe(200)
+    expect((await requestLink({ email: 'alice@example.com', callback: CALLBACK })).status).toBe(429)
+    vi.setSystemTime(new Date('2026-10-16T10:16:00Z'))
     expect((await requestLink({ email: 'alice@example.com', callback: CALLBACK })).status).toBe(200)
+  })
+
+  it('limits sign-in emails per IP address (SIGN_IN_PER_IP_PER_HOUR)', async () => {
+    env.SIGN_IN_PER_IP_PER_HOUR = '2'
+    expect((await requestLink({ email: 'a1@example.com', callback: CALLBACK })).status).toBe(200)
+    expect((await requestLink({ email: 'a2@example.com', callback: CALLBACK })).status).toBe(200)
+    expect((await requestLink({ email: 'a3@example.com', callback: CALLBACK })).status).toBe(429)
+    expect((await requestLink({ email: 'a3@example.com', callback: CALLBACK }, '203.0.113.9')).status).toBe(200)
+  })
+
+  it('stops sending for the day at MAIL_DAILY_LIMIT', async () => {
+    env.MAIL_DAILY_LIMIT = '2'
+    expect((await requestLink({ email: 'a1@example.com', callback: CALLBACK }, '192.0.2.1')).status).toBe(200)
+    expect((await requestLink({ email: 'a2@example.com', callback: CALLBACK }, '192.0.2.2')).status).toBe(200)
+    const third = await requestLink({ email: 'a3@example.com', callback: CALLBACK }, '192.0.2.3')
+    expect(third.status).toBe(429)
+    expect(await third.json()).toMatchObject({ error: 'daily_limit' })
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not store raw addresses or IPs in the counters', async () => {
+    await requestLink({ email: 'alice@example.com', callback: CALLBACK }, '192.0.2.1')
+    const buckets = env.db.rows<{ bucket: string }>('SELECT bucket FROM rate_limits').map((r) => r.bucket).join(' ')
+    expect(buckets).not.toContain('alice')
+    expect(buckets).not.toContain('192.0.2.1')
   })
 
   it('stores the plugin state on the callback', async () => {

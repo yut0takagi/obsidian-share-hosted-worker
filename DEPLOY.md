@@ -37,7 +37,22 @@ answers `503` with `{"error":"email_not_configured","missing":[...]}` naming wha
 missing, and logs the same list. No sign-in token is created in that case.
 
 If Resend refuses a send, the Worker answers `502`, logs Resend's status, and deletes the
-token it just made so the person can retry without waiting for the 5-minute limit.
+token it just made.
+
+### Sign-in email limits
+
+Each request for a sign-in link passes three fixed-window counters kept in D1 (as hashes,
+not raw addresses or IPs). The first one that is full answers `429` with `Retry-After`.
+
+| Limit | Default | Setting |
+|---|---|---|
+| Same address from the same IP (`CF-Connecting-IP`) | 3 per 15 minutes | fixed |
+| One IP, any address | 10 per hour | `SIGN_IN_PER_IP_PER_HOUR` (var) |
+| Whole service | 100 per UTC day | `MAIL_DAILY_LIMIT` (var) |
+
+The address limit counts per IP so that requests from somewhere else cannot use up the
+allowance of the person signing in. The daily default matches Resend's free tier; raise it
+if your plan allows more.
 
 ## Database migrations
 
@@ -48,8 +63,9 @@ applied in order by Wrangler, which records what it has applied in a `d1_migrati
 |---|---|
 | `0001_session_expiry.sql` | Adds `sessions.expires_at`. Existing sessions get 30 days from when the migration runs. Adds an index for the sign-in email rate limit. |
 | `0002_asset_refs.sql` | Adds `assets` and `note_assets`, used to delete images when a share stops. |
+| `0003_rate_limits.sql` | Adds `rate_limits`, the sign-in email counters. |
 
-Both only add columns, tables and indexes, so the 0.1.0 Worker keeps working against a
+They only add columns, tables and indexes, so the 0.1.0 Worker keeps working against a
 migrated database. Apply them **before** deploying the new Worker code, which reads the new
 columns:
 
@@ -88,7 +104,9 @@ per run), together with images nothing else uses. It runs only if you add a cron
 crons = ["17 3 * * *"]   # daily at 03:17 UTC
 ```
 
-Then deploy. Without the trigger, expired notes stay in R2 and keep answering `410`.
+Then deploy. Without the trigger, expired notes stay in R2 and keep answering `410`. The
+same run also deletes rate-limit counters older than two days and sign-in tokens that
+expired more than a day ago; without it those rows stay in D1.
 
 ## Org-wide shares that stop opening
 
