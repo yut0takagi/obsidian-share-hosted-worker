@@ -60,12 +60,23 @@ describe('POST /api/asset', () => {
     expect((await upload(hash, 'png', PNG)).status).toBe(400)
   })
 
-  it('rejects SVG uploads', async () => {
-    const svg = utf8('<svg xmlns="http://www.w3.org/2000/svg"></svg>')
+  it('accepts SVG uploads, stored as image/svg+xml whatever the request says', async () => {
+    const svg = utf8('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>')
     const hash = (await sha256Hex(svg)).slice(0, 32)
-    const res = await upload(hash, 'svg', svg, 'image/svg+xml')
-    expect(res.status).toBe(400)
-    expect(env.r2.objects.size).toBe(0)
+    const res = await upload(hash, 'svg', svg, 'text/html')
+    expect(res.status).toBe(200)
+    expect(env.r2.objects.get(`assets/${hash}.svg`)?.httpMetadata.contentType).toBe('image/svg+xml')
+  })
+
+  it('serves uploaded SVGs sandboxed, so their scripts cannot run on this origin', async () => {
+    const svg = utf8('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>')
+    const hash = (await sha256Hex(svg)).slice(0, 32)
+    await upload(hash, 'svg', svg)
+    const res = await app().request(`/a/${hash}.svg`, {}, env, makeCtx())
+    expect(res.headers.get('Content-Type')).toBe('image/svg+xml')
+    expect(res.headers.get('X-Content-Type-Options')).toBe('nosniff')
+    expect(res.headers.get('Content-Security-Policy')).toMatch(/default-src 'none'.*sandbox/)
+    expect(res.headers.get('Content-Security-Policy')).not.toContain('allow-scripts')
   })
 
   it('rejects an empty body', async () => {

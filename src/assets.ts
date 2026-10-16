@@ -1,17 +1,21 @@
 // src/assets.ts
 // Image assets are content-addressed: the key is (a prefix of) the SHA-256 of the bytes.
 
-/** Types accepted for new uploads. SVG is excluded because it can carry script. */
+/**
+ * Types accepted for upload and served from /a/. SVG can carry script, which is harmless
+ * here: <img> never runs it, and /a/ answers with a sandboxing CSP and nosniff, so opening
+ * the file directly runs nothing either.
+ */
 export const UPLOAD_TYPES: Record<string, string> = {
   png: 'image/png',
   jpg: 'image/jpeg',
   jpeg: 'image/jpeg',
   gif: 'image/gif',
   webp: 'image/webp',
+  svg: 'image/svg+xml',
 }
 
-/** Types served from /a/. SVG stays readable for files uploaded before 0.2.0. */
-export const SERVE_TYPES: Record<string, string> = { ...UPLOAD_TYPES, svg: 'image/svg+xml' }
+export const SERVE_TYPES: Record<string, string> = UPLOAD_TYPES
 
 export const MAX_ASSET_BYTES = 20 * 1024 * 1024
 
@@ -34,7 +38,7 @@ export async function checkAssetUpload(hash: string | undefined, ext: string | u
   if (!hash || !ext) return { ok: false, status: 400, error: 'hash and ext required' }
   if (!HASH_RE.test(hash)) return { ok: false, status: 400, error: 'invalid hash' }
   const contentType = UPLOAD_TYPES[ext]
-  if (!contentType) return { ok: false, status: 400, error: 'unsupported ext (png, jpg, jpeg, gif, webp)' }
+  if (!contentType) return { ok: false, status: 400, error: 'unsupported ext (png, jpg, jpeg, gif, webp, svg)' }
   if (body.byteLength === 0) return { ok: false, status: 400, error: 'empty body' }
   if (body.byteLength > MAX_ASSET_BYTES) return { ok: false, status: 413, error: 'asset too large' }
   const sha256 = await sha256Hex(body)
