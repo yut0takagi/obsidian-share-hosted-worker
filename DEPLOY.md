@@ -64,6 +64,7 @@ applied in order by Wrangler, which records what it has applied in a `d1_migrati
 | `0001_session_expiry.sql` | Adds `sessions.expires_at`. Existing sessions get 30 days from when the migration runs. Adds an index for the sign-in email rate limit. |
 | `0002_asset_refs.sql` | Adds `assets` and `note_assets`, used to delete images when a share stops. |
 | `0003_rate_limits.sql` | Adds `rate_limits`, the sign-in email counters. |
+| `0004_auth_codes.sql` | Adds `auth_codes`, one-time codes that plugin 0.2.0 trades for its session token. |
 
 They only add columns, tables and indexes, so the 0.1.0 Worker keeps working against a
 migrated database. Apply them **before** deploying the new Worker code, which reads the new
@@ -105,8 +106,8 @@ crons = ["17 3 * * *"]   # daily at 03:17 UTC
 ```
 
 Then deploy. Without the trigger, expired notes stay in R2 and keep answering `410`. The
-same run also deletes rate-limit counters older than two days and sign-in tokens that
-expired more than a day ago; without it those rows stay in D1.
+same run also deletes rate-limit counters older than two days, and sign-in tokens and
+one-time codes that expired more than a day ago; without it those rows stay in D1.
 
 ## Org-wide shares that stop opening
 

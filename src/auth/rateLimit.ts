@@ -47,8 +47,10 @@ export async function signInLimits(env: SignInLimitEnv, email: string, ip: strin
   }
 }
 
-/** Removes counters older than two days and sign-in tokens that expired more than a day ago. */
+/** Removes counters older than two days, and sign-in tokens and codes that expired more than a day ago. */
 export async function purgeOldRecords(db: D1Database, now: Date): Promise<void> {
+  const dayAgo = new Date(now.getTime() - DAY_MS).toISOString()
   await db.prepare('DELETE FROM rate_limits WHERE window_start < ?').bind(new Date(now.getTime() - 2 * DAY_MS).toISOString()).run()
-  await db.prepare('DELETE FROM magic_link_tokens WHERE expires_at < ?').bind(new Date(now.getTime() - DAY_MS).toISOString()).run()
+  await db.prepare('DELETE FROM magic_link_tokens WHERE expires_at < ?').bind(dayAgo).run()
+  await db.prepare('DELETE FROM auth_codes WHERE expires_at < ?').bind(dayAgo).run()
 }

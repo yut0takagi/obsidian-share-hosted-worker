@@ -37,7 +37,15 @@ describe('sign in, share an org note with an image, read it, stop it', () => {
     const confirm = await req('/auth/verify', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: `token=${token}` })
     const cb = new URL(confirm.headers.get('Location')!)
     expect(cb.searchParams.get('state')).toBe(state)
-    const auth = { Authorization: `Bearer ${cb.searchParams.get('api_token')}` }
+    expect(cb.searchParams.has('api_token')).toBe(false)
+
+    // 3b. The plugin trades the one-time code (and its state) for the session token.
+    const exchanged = await req('/auth/exchange', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: cb.searchParams.get('code'), state }),
+    })
+    const { api_token } = await exchanged.json() as { api_token: string }
+    const auth = { Authorization: `Bearer ${api_token}` }
 
     // 4. Upload an image and share an org-wide note that shows it.
     const img = bytes(0x89, 0x50, 0x4e, 0x47, 7, 7, 7)

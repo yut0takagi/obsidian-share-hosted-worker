@@ -200,11 +200,13 @@ describe('POST /auth/verify', () => {
     expect(env.db.rows('SELECT * FROM sessions')).toHaveLength(1)
   })
 
-  it('passes the stored state back to the plugin', async () => {
+  it('gives plugins that sent a state a one-time code, not the session token', async () => {
     seedToken('m_ok', { callback: `${CALLBACK}?state=${STATE}` })
     const loc = new URL((await confirm('m_ok')).headers.get('Location')!)
     expect(loc.searchParams.get('state')).toBe(STATE)
-    expect(loc.searchParams.get('email')).toBe('alice@example.com')
+    expect(loc.searchParams.get('code')).toMatch(/^c_[A-Za-z0-9_-]{32}$/)
+    expect(loc.searchParams.has('api_token')).toBe(false)
+    expect(env.db.rows('SELECT * FROM sessions')).toHaveLength(0)
   })
 
   it('works only once', async () => {
@@ -254,5 +256,54 @@ describe('sessions', () => {
     expect(res.status).toBe(204)
     expect(env.db.rows('SELECT * FROM sessions WHERE user_id = ?', a.userId)).toHaveLength(0)
     expect(env.db.rows('SELECT * FROM sessions WHERE token = ?', other.token)).toHaveLength(1)
+  })
+})
+
+describe('POST /auth/exchange', () => {
+  async function codeFor(state = STATE) {
+    seedToken(`m_${state}`, { callback: `${CALLBACK}?state=${state}` })
+    const loc = new URL((await confirm(`m_${state}`)).headers.get('Location')!)
+    return loc.searchParams.get('code')!
+  }
+
+  async function exchange(body: Record<string, unknown>) {
+    return app().request('/auth/exchange', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    }, env, makeCtx())
+  }
+
+  it('trades the code and state for a 30-day session', async () => {
+    const code = await codeFor()
+    const res = await exchange({ code, state: STATE })
+    expect(res.status).toBe(200)
+    expect(res.headers.get('Cache-Control')).toBe('no-store')
+    const body = await res.json() as { api_token: string; email: string }
+    expect(body.api_token).toMatch(/^s_/)
+    expect(body.email).toBe('alice@example.com')
+    expect(env.db.rows('SELECT token FROM sessions')).toEqual([{ token: body.api_token }])
+  })
+
+  it('works once', async () => {
+    const code = await codeFor()
+    expect((await exchange({ code, state: STATE })).status).toBe(200)
+    expect((await exchange({ code, state: STATE })).status).toBe(400)
+    expect(env.db.rows('SELECT * FROM sessions')).toHaveLength(1)
+  })
+
+  it('refuses a different state', async () => {
+    const code = await codeFor()
+    expect((await exchange({ code, state: 'st_another_state_value_x' })).status).toBe(400)
+    expect(env.db.rows('SELECT * FROM sessions')).toHaveLength(0)
+  })
+
+  it('refuses codes older than 5 minutes', async () => {
+    const code = await codeFor()
+    env.db.sqlite.prepare('UPDATE auth_codes SET expires_at = ? WHERE code = ?').run('2020-01-01T00:00:00.000Z', code)
+    expect((await exchange({ code, state: STATE })).status).toBe(400)
+  })
+
+  it('refuses unknown codes and malformed bodies', async () => {
+    expect((await exchange({ code: 'c_nope', state: STATE })).status).toBe(400)
+    expect((await exchange({})).status).toBe(400)
   })
 })

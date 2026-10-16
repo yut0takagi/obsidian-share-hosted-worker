@@ -35,3 +35,14 @@ describe('purgeOldRecords', () => {
     expect(fake.rows('SELECT token FROM magic_link_tokens')).toEqual([{ token: 'm_new' }])
   })
 })
+
+describe('purgeOldRecords: auth codes', () => {
+  it('drops one-time codes that expired more than a day ago', async () => {
+    const fake = new FakeD1()
+    fake.sqlite.exec("INSERT INTO users (id, email, created_at) VALUES ('u1', 'a@example.com', '2026-01-01T00:00:00Z')")
+    fake.sqlite.exec("INSERT INTO auth_codes (code, user_id, state, created_at, expires_at) VALUES ('c_old', 'u1', 's', '2026-10-01T00:00:00Z', '2026-10-01T00:05:00Z'), ('c_new', 'u1', 's', '2026-10-15T23:59:00Z', '2026-10-16T00:04:00Z')")
+    await purgeOldRecords(fake as unknown as D1Database, new Date('2026-10-16T00:00:00Z'))
+    expect(fake.rows('SELECT code FROM auth_codes')).toEqual([{ code: 'c_new' }])
+  })
+})
+

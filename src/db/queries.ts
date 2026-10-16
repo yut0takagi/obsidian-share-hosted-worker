@@ -67,3 +67,16 @@ export async function consumeMagicTokenOnce(db: D1Database, token: string, at: s
 export async function deleteMagicToken(db: D1Database, token: string): Promise<void> {
   await db.prepare('DELETE FROM magic_link_tokens WHERE token = ?').bind(token).run()
 }
+
+export async function createAuthCode(db: D1Database, a: { code: string; user_id: string; state: string; created_at: string; expires_at: string }): Promise<void> {
+  await db.prepare(
+    'INSERT INTO auth_codes (code, user_id, state, created_at, expires_at) VALUES (?, ?, ?, ?, ?)'
+  ).bind(a.code, a.user_id, a.state, a.created_at, a.expires_at).run()
+}
+
+/** Uses up a code if it is unused, unexpired and bound to this state. Returns its user id. */
+export async function consumeAuthCode(db: D1Database, code: string, state: string, at: string): Promise<string | null> {
+  return await db.prepare(
+    'UPDATE auth_codes SET used_at = ? WHERE code = ? AND state = ? AND used_at IS NULL AND expires_at > ? RETURNING user_id'
+  ).bind(at, code, state, at).first<string>('user_id')
+}
