@@ -1,6 +1,7 @@
 // src/routes/public.ts
 import { Hono } from 'hono'
 import { getMeta, getHtml } from '../r2'
+import { sharePageResponse } from '../render/sharePage'
 
 type Bindings = { R2: R2Bucket }
 
@@ -14,7 +15,7 @@ route.get('/p/:uuid', async (c) => {
   if (meta.expires_at && new Date(meta.expires_at) < new Date()) return c.text('Link Expired', 410)
   const html = await getHtml(c.env.R2, uuid)
   if (!html) return c.text('Not Found', 404)
-  return c.html(html)
+  return sharePageResponse(html)
 })
 
 export default route

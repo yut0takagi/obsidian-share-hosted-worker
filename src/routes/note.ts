@@ -3,6 +3,7 @@ import { Hono } from 'hono'
 import { getMeta, getHtml } from '../r2'
 import { verifyAccessJwt } from '../auth/cfAccessJwt'
 import { isAllowed } from '../auth/audienceCheck'
+import { sharePageResponse } from '../render/sharePage'
 
 type Bindings = {
   R2: R2Bucket
@@ -33,7 +34,7 @@ route.get('/n/:uuid', async (c) => {
 
   const html = await getHtml(c.env.R2, uuid)
   if (!html) return c.text('Not Found', 404)
-  return c.html(html)
+  return sharePageResponse(html)
 })
 
 export default route
