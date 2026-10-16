@@ -85,6 +85,29 @@ route.post('/api/share', sessionMiddleware, async (c) => {
   return c.json({ uuid, url: `${host}${path}` } satisfies ShareResponse)
 })
 
+// Lets the plugin pre-fill the share dialog when re-sharing. Recipients never go into the
+// note's frontmatter, so this is where they come from.
+route.get('/api/share/:uuid', sessionMiddleware, async (c) => {
+  const uuid = c.req.param('uuid')
+  const meta = await getMeta(c.env.R2, uuid)
+  if (!meta) return c.json({ error: 'share not found' }, 404)
+  if (meta.owner_id !== c.get('userId')) return c.json({ error: 'forbidden' }, 403)
+  const host = new URL(c.req.url).origin
+  const path = meta.mode === 'public' ? `/p/${uuid}` : `/n/${uuid}`
+  c.header('Cache-Control', 'no-store')
+  return c.json({
+    uuid,
+    url: `${host}${path}`,
+    mode: meta.mode,
+    audience: meta.audience,
+    org_domain: meta.org_domain,
+    expires_at: meta.expires_at,
+    title: meta.title,
+    created_at: meta.created_at,
+    updated_at: meta.updated_at,
+  })
+})
+
 route.delete('/api/share/:uuid', sessionMiddleware, async (c) => {
   const uuid = c.req.param('uuid')
   const userIdVar = c.get('userId')

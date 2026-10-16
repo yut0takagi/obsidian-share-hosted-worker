@@ -159,3 +159,35 @@ describe('POST /api/share: org mode follows the sign-in domain', () => {
     expect((await share(gina.token, body({ mode: 'list' }))).status).toBe(200)
   })
 })
+
+describe('GET /api/share/:uuid', () => {
+  async function get(token: string, uuid: string) {
+    return app().request(`/api/share/${uuid}`, { headers: bearer(token) }, env, makeCtx())
+  }
+
+  it('returns recipients, expiry and mode to the owner', async () => {
+    const expires = '2030-01-01T00:00:00.000Z'
+    const { uuid, url } = await (await share(alice.token, body({ audience: ['bob@example.com', 'carol@example.com'], expires_at: expires }))).json() as { uuid: string; url: string }
+    const res = await get(alice.token, uuid)
+    expect(res.status).toBe(200)
+    expect(res.headers.get('Cache-Control')).toBe('no-store')
+    expect(await res.json()).toMatchObject({
+      uuid, url, mode: 'list', audience: ['bob@example.com', 'carol@example.com'], expires_at: expires, org_domain: '',
+    })
+  })
+
+  it('hides the share from other users', async () => {
+    const { uuid } = await (await share(alice.token, body())).json() as { uuid: string }
+    const res = await get(mallory.token, uuid)
+    expect(res.status).toBe(403)
+    expect(JSON.stringify(await res.json())).not.toContain('bob@example.com')
+  })
+
+  it('returns 404 for unknown shares', async () => {
+    expect((await get(alice.token, 'nothingHere1')).status).toBe(404)
+  })
+
+  it('requires a session', async () => {
+    expect((await app().request('/api/share/abcdefghijkl', {}, env, makeCtx())).status).toBe(401)
+  })
+})
