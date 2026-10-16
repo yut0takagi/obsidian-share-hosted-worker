@@ -28,17 +28,22 @@ export async function deleteNote(r2: R2Bucket, uuid: string): Promise<void> {
   await r2.delete([`notes/${uuid}.json`, `notes/${uuid}.html`])
 }
 
-export async function putAsset(r2: R2Bucket, hash: string, ext: string, body: ArrayBuffer, contentType: string): Promise<void> {
-  await r2.put(`assets/${hash}.${ext}`, body, {
+export async function putAsset(r2: R2Bucket, key: string, body: ArrayBuffer, contentType: string, sha256: string): Promise<void> {
+  await r2.put(`assets/${key}`, body, {
     httpMetadata: { contentType },
+    // Marks the bytes as checked against the key. Objects from 0.1.0 lack it.
+    customMetadata: { sha256 },
   })
 }
 
-export async function getAsset(r2: R2Bucket, hash: string, ext: string): Promise<{ body: ArrayBuffer; contentType: string } | null> {
-  const obj = await r2.get(`assets/${hash}.${ext}`)
+export async function headAsset(r2: R2Bucket, key: string): Promise<{ sha256: string | null } | null> {
+  const obj = await r2.head(`assets/${key}`)
   if (!obj) return null
-  return {
-    body: await obj.arrayBuffer(),
-    contentType: obj.httpMetadata?.contentType || 'application/octet-stream',
-  }
+  return { sha256: obj.customMetadata?.sha256 ?? null }
+}
+
+export async function getAsset(r2: R2Bucket, key: string): Promise<ArrayBuffer | null> {
+  const obj = await r2.get(`assets/${key}`)
+  if (!obj) return null
+  return await obj.arrayBuffer()
 }
