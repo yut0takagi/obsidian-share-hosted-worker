@@ -4,6 +4,7 @@ import * as q from '../db/queries'
 import { userId, sessionToken, magicToken } from '../db/nanoid'
 import { sendMagicLinkEmail } from '../email/mailchannels'
 import { sessionMiddleware } from '../auth/sessionMiddleware'
+import { orgDomainFor } from '../auth/orgDomain'
 
 type Bindings = {
   DB: D1Database
@@ -95,7 +96,7 @@ route.get('/auth/me', sessionMiddleware, async (c) => {
   const userIdVar = c.get('userId')
   const user = await q.findUserById(c.env.DB, userIdVar)
   if (!user) return c.json({ error: 'user not found' }, 404)
-  return c.json({ user })
+  return c.json({ user, org: orgDomainFor(user.email) })
 })
 
 route.patch('/auth/me', sessionMiddleware, async (c) => {
@@ -107,7 +108,7 @@ route.patch('/auth/me', sessionMiddleware, async (c) => {
     default_owner_name: body.default_owner_name ?? null,
   })
   const user = await q.findUserById(c.env.DB, userIdVar)
-  return c.json({ user })
+  return c.json({ user, org: user ? orgDomainFor(user.email) : null })
 })
 
 route.post('/auth/logout', sessionMiddleware, async (c) => {

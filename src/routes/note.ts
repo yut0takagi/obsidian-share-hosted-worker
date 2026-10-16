@@ -4,9 +4,12 @@ import { getMeta, getHtml } from '../r2'
 import { verifyAccessJwt } from '../auth/cfAccessJwt'
 import { isAllowed } from '../auth/audienceCheck'
 import { sharePageResponse } from '../render/sharePage'
+import { effectiveOrgDomain } from '../auth/orgDomain'
+import * as q from '../db/queries'
 
 type Bindings = {
   R2: R2Bucket
+  DB: D1Database
   CF_ACCESS_TEAM_DOMAIN: string
   CF_ACCESS_AUD: string
 }
@@ -28,7 +31,13 @@ route.get('/n/:uuid', async (c) => {
   const claims = await verifyAccessJwt(jwt, teamDomain, aud)
   if (!claims) return c.text('Unauthorized: invalid JWT', 401)
 
-  if (!isAllowed({ mode: meta.mode, audience: meta.audience, org_domain: meta.org_domain }, claims.email)) {
+  let orgDomain = ''
+  if (meta.mode === 'org') {
+    const owner = await q.findUserById(c.env.DB, meta.owner_id)
+    orgDomain = effectiveOrgDomain(meta.org_domain, owner?.email ?? null) ?? ''
+  }
+
+  if (!isAllowed({ mode: meta.mode, audience: meta.audience, org_domain: orgDomain }, claims.email)) {
     return c.text(`Forbidden: ${claims.email} not authorized for this note`, 403)
   }
 

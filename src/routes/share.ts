@@ -5,6 +5,7 @@ import { sessionMiddleware } from '../auth/sessionMiddleware'
 import { noteUuid } from '../db/nanoid'
 import * as q from '../db/queries'
 import { parseShareRequest } from '../share/request'
+import { orgDomainFor } from '../auth/orgDomain'
 import type { NoteMeta, ShareResponse } from '../types'
 
 type Bindings = { R2: R2Bucket; DB: D1Database }
@@ -32,6 +33,20 @@ route.post('/api/share', sessionMiddleware, async (c) => {
   const user = await q.findUserById(c.env.DB, userIdVar)
   if (!user) return c.json({ error: 'unauthorized' }, 401)
 
+  // Org mode always means the owner's own sign-in domain. A client value is only accepted
+  // when it says the same thing (0.1.0 sent whatever was typed into settings).
+  let orgDomain = ''
+  if (req.mode === 'org') {
+    const org = orgDomainFor(user.email)
+    if (!org.available) {
+      return c.json({ error: 'org_mode_unavailable', message: `Org-wide sharing is not available for @${org.domain} addresses. Share with specific people instead.` }, 400)
+    }
+    if (req.org_domain && req.org_domain.trim().toLowerCase() !== org.domain) {
+      return c.json({ error: 'org_domain_mismatch', message: `Org-wide sharing goes to @${org.domain}, the domain you signed in with.` }, 400)
+    }
+    orgDomain = org.domain
+  }
+
   // The server issues ids. A client-supplied uuid can only point at a share the caller already owns,
   // so stopped or never-issued URLs cannot be claimed.
   let uuid: string
@@ -51,7 +66,7 @@ route.post('/api/share', sessionMiddleware, async (c) => {
     owner_id: userIdVar,
     mode: req.mode,
     audience: req.audience,
-    org_domain: req.org_domain ?? user.default_org_domain ?? '',
+    org_domain: orgDomain,
     expires_at: req.expires_at,
     created_at,
     updated_at: now,

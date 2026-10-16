@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { Hono } from 'hono'
-import { makeEnv, makeCtx, type TestEnv } from '../helpers/env'
+import { makeEnv, makeCtx, signIn, type TestEnv } from '../helpers/env'
 
 vi.mock('../../src/auth/cfAccessJwt', () => ({
-  verifyAccessJwt: vi.fn(async (jwt: string) => (jwt === 'good' ? { email: 'bob@example.com' } : null)),
+  verifyAccessJwt: vi.fn(async (jwt: string) => (jwt.startsWith('as:') ? { email: jwt.slice(3) } : jwt === 'good' ? { email: 'bob@example.com' } : null)),
 }))
 
 const { default: noteRoute } = await import('../../src/routes/note')
@@ -52,5 +52,30 @@ describe('GET /n/:uuid', () => {
     expect(res.status).toBe(200)
     expect(res.headers.get('Content-Security-Policy')).toContain('sandbox')
     expect(res.headers.get('Cache-Control')).toBe('no-store')
+  })
+})
+
+describe('GET /n/:uuid in org mode', () => {
+  async function read(uuid: string, viewer: string) {
+    return app().request(`/n/${uuid}`, { headers: { 'Cf-Access-Jwt-Assertion': `as:${viewer}` } }, env, makeCtx())
+  }
+
+  it('lets people at the owner domain read', async () => {
+    const { userId } = signIn(env, 'owner@example.com')
+    seedNote('org1', { mode: 'org', org_domain: 'example.com', owner_id: userId })
+    expect((await read('org1', 'carol@example.com')).status).toBe(200)
+    expect((await read('org1', 'carol@example.net')).status).toBe(403)
+  })
+
+  it('refuses notes stored for a free-mail domain before 0.2.0', async () => {
+    const { userId } = signIn(env, 'owner@gmail.com')
+    seedNote('org2', { mode: 'org', org_domain: 'gmail.com', owner_id: userId })
+    expect((await read('org2', 'anyone@gmail.com')).status).toBe(403)
+  })
+
+  it('refuses notes whose stored domain is not the owner domain', async () => {
+    const { userId } = signIn(env, 'owner@example.com')
+    seedNote('org3', { mode: 'org', org_domain: 'other.com', owner_id: userId })
+    expect((await read('org3', 'dave@other.com')).status).toBe(403)
   })
 })

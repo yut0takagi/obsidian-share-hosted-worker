@@ -129,3 +129,33 @@ describe('POST /api/share: input checks', () => {
     expect(res.status).toBe(401)
   })
 })
+
+describe('POST /api/share: org mode follows the sign-in domain', () => {
+  it('uses the domain of the signed-in email when the client sends none', async () => {
+    const { uuid } = await (await share(alice.token, body({ mode: 'org', audience: [], org_domain: '' }))).json() as { uuid: string }
+    expect(meta(uuid).org_domain).toBe('example.com')
+  })
+
+  it('accepts a client value that matches the sign-in domain', async () => {
+    const res = await share(alice.token, body({ mode: 'org', audience: [], org_domain: 'Example.com' }))
+    expect(res.status).toBe(200)
+  })
+
+  it('refuses a client value for some other domain', async () => {
+    const res = await share(alice.token, body({ mode: 'org', audience: [], org_domain: 'gmail.com' }))
+    expect(res.status).toBe(400)
+    expect(env.r2.objects.size).toBe(0)
+  })
+
+  it('refuses org mode for free-mail accounts', async () => {
+    const gina = signIn(env, 'gina@gmail.com')
+    const res = await share(gina.token, body({ mode: 'org', audience: [] }))
+    expect(res.status).toBe(400)
+    expect(await res.json()).toMatchObject({ error: 'org_mode_unavailable' })
+  })
+
+  it('still lets free-mail accounts share with specific people', async () => {
+    const gina = signIn(env, 'gina@gmail.com')
+    expect((await share(gina.token, body({ mode: 'list' }))).status).toBe(200)
+  })
+})
