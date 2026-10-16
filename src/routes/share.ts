@@ -4,53 +4,67 @@ import { putMeta, putHtml, getMeta, deleteNote } from '../r2'
 import { sessionMiddleware } from '../auth/sessionMiddleware'
 import { noteUuid } from '../db/nanoid'
 import * as q from '../db/queries'
-import type { NoteMeta, ShareRequest, ShareResponse } from '../types'
+import { parseShareRequest } from '../share/request'
+import type { NoteMeta, ShareResponse } from '../types'
 
 type Bindings = { R2: R2Bucket; DB: D1Database }
 type Vars = { session: any; userId: string }
 
 const route = new Hono<{ Bindings: Bindings; Variables: Vars }>()
 
+async function freshUuid(r2: R2Bucket): Promise<string> {
+  for (let i = 0; i < 5; i++) {
+    const uuid = noteUuid()
+    if (!(await getMeta(r2, uuid))) return uuid
+  }
+  throw new Error('could not allocate a note id')
+}
+
 route.post('/api/share', sessionMiddleware, async (c) => {
-  const body = (await c.req.json()) as ShareRequest
+  let raw: unknown
+  try { raw = await c.req.json() } catch { return c.json({ error: 'invalid json' }, 400) }
+  const parsed = parseShareRequest(raw)
+  if (!parsed.ok) return c.json({ error: parsed.error }, 400)
+  const req = parsed.value
+
   const now = new Date().toISOString()
   const userIdVar = c.get('userId')
-
-  let uuid = body.uuid
-  let created_at = now
-
-  if (uuid) {
-    const existing = await getMeta(c.env.R2, uuid)
-    if (existing) {
-      if (existing.owner_id !== userIdVar) return c.text('Forbidden', 403)
-      created_at = existing.created_at
-    }
-  } else {
-    uuid = noteUuid()
-  }
-
   const user = await q.findUserById(c.env.DB, userIdVar)
-  const orgDomain = body.org_domain ?? user?.default_org_domain ?? ''
+  if (!user) return c.json({ error: 'unauthorized' }, 401)
+
+  // The server issues ids. A client-supplied uuid can only point at a share the caller already owns,
+  // so stopped or never-issued URLs cannot be claimed.
+  let uuid: string
+  let created_at = now
+  if (req.uuid) {
+    const existing = await getMeta(c.env.R2, req.uuid)
+    if (!existing) return c.json({ error: 'share not found' }, 404)
+    if (existing.owner_id !== userIdVar) return c.json({ error: 'forbidden' }, 403)
+    uuid = req.uuid
+    created_at = existing.created_at
+  } else {
+    uuid = await freshUuid(c.env.R2)
+  }
 
   const meta: NoteMeta = {
     uuid,
     owner_id: userIdVar,
-    mode: body.mode,
-    audience: body.audience || [],
-    org_domain: orgDomain,
-    expires_at: body.expires_at || null,
+    mode: req.mode,
+    audience: req.audience,
+    org_domain: req.org_domain ?? user.default_org_domain ?? '',
+    expires_at: req.expires_at,
     created_at,
     updated_at: now,
-    title: body.title,
-    source_path: body.source_path,
-    owner_email: body.owner_email,
+    title: req.title,
+    source_path: req.source_path,
+    owner_email: user.email,
   }
 
   await putMeta(c.env.R2, uuid, meta)
-  await putHtml(c.env.R2, uuid, body.html)
+  await putHtml(c.env.R2, uuid, req.html)
 
   const host = new URL(c.req.url).origin
-  const path = body.mode === 'public' ? `/p/${uuid}` : `/n/${uuid}`
+  const path = req.mode === 'public' ? `/p/${uuid}` : `/n/${uuid}`
   return c.json({ uuid, url: `${host}${path}` } satisfies ShareResponse)
 })
 
