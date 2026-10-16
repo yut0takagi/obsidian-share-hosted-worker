@@ -4,12 +4,13 @@ import { getMeta, getHtml } from '../r2'
 import { verifyAccessJwt } from '../auth/cfAccessJwt'
 import { isAllowed } from '../auth/audienceCheck'
 import { sharePageResponse } from '../render/sharePage'
-import { effectiveOrgDomain } from '../auth/orgDomain'
+import { effectiveOrgDomain, parseExtraFreeMailDomains } from '../auth/orgDomain'
 import * as q from '../db/queries'
 
 type Bindings = {
   R2: R2Bucket
   DB: D1Database
+  EXTRA_FREE_MAIL_DOMAINS?: string
   CF_ACCESS_TEAM_DOMAIN: string
   CF_ACCESS_AUD: string
 }
@@ -34,7 +35,7 @@ route.get('/n/:uuid', async (c) => {
   let orgDomain = ''
   if (meta.mode === 'org') {
     const owner = await q.findUserById(c.env.DB, meta.owner_id)
-    orgDomain = effectiveOrgDomain(meta.org_domain, owner?.email ?? null) ?? ''
+    orgDomain = effectiveOrgDomain(meta.org_domain, owner?.email ?? null, parseExtraFreeMailDomains(c.env.EXTRA_FREE_MAIL_DOMAINS)) ?? ''
   }
 
   if (!isAllowed({ mode: meta.mode, audience: meta.audience, org_domain: orgDomain }, claims.email)) {

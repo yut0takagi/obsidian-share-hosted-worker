@@ -7,10 +7,10 @@ import { noteUuid } from '../db/nanoid'
 import * as q from '../db/queries'
 import { parseShareRequest, MAX_SHARE_REQUEST_BYTES } from '../share/request'
 import { declaredTooLarge } from '../util/bodySize'
-import { orgDomainFor } from '../auth/orgDomain'
+import { orgDomainFor, parseExtraFreeMailDomains } from '../auth/orgDomain'
 import type { NoteMeta, ShareResponse } from '../types'
 
-type Bindings = { R2: R2Bucket; DB: D1Database }
+type Bindings = { R2: R2Bucket; DB: D1Database; EXTRA_FREE_MAIL_DOMAINS?: string }
 type Vars = { session: any; userId: string }
 
 const route = new Hono<{ Bindings: Bindings; Variables: Vars }>()
@@ -40,7 +40,7 @@ route.post('/api/share', sessionMiddleware, async (c) => {
   // when it says the same thing (0.1.0 sent whatever was typed into settings).
   let orgDomain = ''
   if (req.mode === 'org') {
-    const org = orgDomainFor(user.email)
+    const org = orgDomainFor(user.email, parseExtraFreeMailDomains(c.env.EXTRA_FREE_MAIL_DOMAINS))
     if (!org.available) {
       return c.json({ error: 'org_mode_unavailable', message: `Org-wide sharing is not available for @${org.domain} addresses. Share with specific people instead.` }, 400)
     }

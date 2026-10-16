@@ -3,30 +3,29 @@
 // domains an organization controls, so it is tied to the owner's sign-in domain and
 // refused for consumer mail providers, where the "org" would be everyone.
 
-export const FREE_MAIL_DOMAINS: ReadonlySet<string> = new Set([
-  // Global
-  'gmail.com', 'googlemail.com', 'outlook.com', 'outlook.jp', 'hotmail.com', 'hotmail.co.jp', 'hotmail.co.uk',
-  'hotmail.fr', 'live.com', 'live.jp', 'msn.com', 'yahoo.com', 'yahoo.co.jp', 'yahoo.co.uk', 'yahoo.fr', 'ymail.com',
-  'rocketmail.com', 'icloud.com', 'me.com', 'mac.com', 'aol.com', 'proton.me', 'protonmail.com', 'pm.me',
-  'gmx.com', 'gmx.de', 'gmx.net', 'web.de', 'mail.com', 'zoho.com', 'yandex.com', 'yandex.ru', 'mail.ru',
-  'fastmail.com', 'hey.com', 'tutanota.com', 'tuta.io', 'qq.com', '163.com', '126.com', 'naver.com',
-  // Japan: carriers and ISPs whose addresses are handed to consumers
-  'docomo.ne.jp', 'ezweb.ne.jp', 'au.com', 'softbank.ne.jp', 'i.softbank.jp', 'ymobile.ne.jp',
-  'nifty.com', 'biglobe.ne.jp', 'ocn.ne.jp', 'so-net.ne.jp',
-])
+import BUILT_IN from './freeMailDomains.json'
+
+/** Consumer mail providers. Operators can add more with EXTRA_FREE_MAIL_DOMAINS. */
+export const FREE_MAIL_DOMAINS: ReadonlySet<string> = new Set(BUILT_IN as string[])
+
+/** Parses EXTRA_FREE_MAIL_DOMAINS: domains separated by commas or whitespace. */
+export function parseExtraFreeMailDomains(value: string | undefined): ReadonlySet<string> {
+  return new Set((value ?? '').split(/[\s,]+/).map((d) => d.trim().toLowerCase()).filter(Boolean))
+}
 
 export function emailDomain(email: string): string {
   const at = email.lastIndexOf('@')
   return at === -1 ? '' : email.slice(at + 1).trim().toLowerCase()
 }
 
-export function isFreeMailDomain(domain: string): boolean {
-  return FREE_MAIL_DOMAINS.has(domain.trim().toLowerCase())
+export function isFreeMailDomain(domain: string, extra: ReadonlySet<string> = new Set()): boolean {
+  const d = domain.trim().toLowerCase()
+  return FREE_MAIL_DOMAINS.has(d) || extra.has(d)
 }
 
-export function orgDomainFor(email: string): { domain: string; available: boolean } {
+export function orgDomainFor(email: string, extra?: ReadonlySet<string>): { domain: string; available: boolean } {
   const domain = emailDomain(email)
-  return { domain, available: domain !== '' && !isFreeMailDomain(domain) }
+  return { domain, available: domain !== '' && !isFreeMailDomain(domain, extra) }
 }
 
 /**
@@ -34,9 +33,9 @@ export function orgDomainFor(email: string): { domain: string; available: boolea
  * domain the client sent, so anything other than the owner's own (non free-mail) domain
  * is treated as "nobody".
  */
-export function effectiveOrgDomain(storedDomain: string, ownerEmail: string | null): string | null {
+export function effectiveOrgDomain(storedDomain: string, ownerEmail: string | null, extra?: ReadonlySet<string>): string | null {
   if (!ownerEmail) return null
-  const owner = orgDomainFor(ownerEmail)
+  const owner = orgDomainFor(ownerEmail, extra)
   if (!owner.available) return null
   return (storedDomain || '').trim().toLowerCase() === owner.domain ? owner.domain : null
 }

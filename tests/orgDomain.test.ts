@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { emailDomain, isFreeMailDomain, orgDomainFor, effectiveOrgDomain } from '../src/auth/orgDomain'
+import { emailDomain, isFreeMailDomain, orgDomainFor, effectiveOrgDomain, parseExtraFreeMailDomains } from '../src/auth/orgDomain'
 
 describe('emailDomain', () => {
   it('returns the lower-cased part after @', () => {
@@ -40,5 +40,19 @@ describe('effectiveOrgDomain (read time, for notes stored before 0.2.0)', () => 
   })
   it('fails closed without an owner', () => {
     expect(effectiveOrgDomain('example.com', null)).toBeNull()
+  })
+})
+
+describe('operator-added free-mail domains', () => {
+  it('parses a comma or whitespace separated list', () => {
+    expect([...parseExtraFreeMailDomains(' Corp-Mail.test, isp.test\nthird.test ')]).toEqual(['corp-mail.test', 'isp.test', 'third.test'])
+    expect(parseExtraFreeMailDomains(undefined).size).toBe(0)
+  })
+
+  it('treats added domains like the built-in list', () => {
+    const extra = parseExtraFreeMailDomains('isp.test')
+    expect(isFreeMailDomain('isp.test', extra)).toBe(true)
+    expect(orgDomainFor('user@isp.test', extra).available).toBe(false)
+    expect(effectiveOrgDomain('isp.test', 'owner@isp.test', extra)).toBeNull()
   })
 })

@@ -78,4 +78,11 @@ describe('GET /n/:uuid in org mode', () => {
     seedNote('org3', { mode: 'org', org_domain: 'other.test', owner_id: userId })
     expect((await read('org3', 'dave@other.test')).status).toBe(403)
   })
+
+  it('refuses org notes for operator-added free-mail domains', async () => {
+    env.EXTRA_FREE_MAIL_DOMAINS = 'example.com'
+    const { userId } = signIn(env, 'owner@example.com')
+    seedNote('org4', { mode: 'org', org_domain: 'example.com', owner_id: userId })
+    expect((await read('org4', 'carol@example.com')).status).toBe(403)
+  })
 })

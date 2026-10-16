@@ -24,4 +24,11 @@ describe('GET /auth/me', () => {
     const res = await app().request('/auth/me', { headers: bearer(token) }, env, makeCtx())
     expect(await res.json()).toMatchObject({ org: { domain: 'gmail.com', available: false } })
   })
+
+  it('reports operator-added free-mail domains as unavailable', async () => {
+    const env = makeEnv({ EXTRA_FREE_MAIL_DOMAINS: 'example.com' })
+    const { token } = signIn(env, 'alice@example.com')
+    const res = await app().request('/auth/me', { headers: bearer(token) }, env, makeCtx())
+    expect(await res.json()).toMatchObject({ org: { domain: 'example.com', available: false } })
+  })
 })

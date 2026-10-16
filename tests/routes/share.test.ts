@@ -209,3 +209,12 @@ describe('POST /api/share: size limits', () => {
     expect(res.status).toBe(413)
   })
 })
+
+describe('POST /api/share: operator-added free-mail domains', () => {
+  it('refuses org mode for a domain listed in EXTRA_FREE_MAIL_DOMAINS', async () => {
+    env.EXTRA_FREE_MAIL_DOMAINS = 'example.com'
+    const res = await share(alice.token, body({ mode: 'org', audience: [] }))
+    expect(res.status).toBe(400)
+    expect(await res.json()).toMatchObject({ error: 'org_mode_unavailable' })
+  })
+})

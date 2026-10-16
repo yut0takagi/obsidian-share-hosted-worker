@@ -4,12 +4,12 @@ import * as q from '../db/queries'
 import { userId, sessionToken, magicToken } from '../db/nanoid'
 import { resolveMailConfig, sendMagicLink, type MailEnv } from '../email/mailer'
 import { sessionMiddleware } from '../auth/sessionMiddleware'
-import { orgDomainFor } from '../auth/orgDomain'
+import { orgDomainFor, parseExtraFreeMailDomains } from '../auth/orgDomain'
 import { sessionExpiresAt, magicLinkRetryAfter } from '../auth/session'
 import { renderConfirmPage, renderMessagePage, VERIFY_PAGE_HEADERS } from '../auth/verifyPage'
 import { EMAIL_RE, normalizeEmail } from '../util/email'
 
-type Bindings = { DB: D1Database } & MailEnv
+type Bindings = { DB: D1Database; EXTRA_FREE_MAIL_DOMAINS?: string } & MailEnv
 
 const route = new Hono<{ Bindings: Bindings; Variables: { session: any; userId: string } }>()
 
@@ -132,7 +132,7 @@ route.get('/auth/me', sessionMiddleware, async (c) => {
   const userIdVar = c.get('userId')
   const user = await q.findUserById(c.env.DB, userIdVar)
   if (!user) return c.json({ error: 'user not found' }, 404)
-  return c.json({ user, org: orgDomainFor(user.email) })
+  return c.json({ user, org: orgDomainFor(user.email, parseExtraFreeMailDomains(c.env.EXTRA_FREE_MAIL_DOMAINS)) })
 })
 
 route.patch('/auth/me', sessionMiddleware, async (c) => {
@@ -144,7 +144,7 @@ route.patch('/auth/me', sessionMiddleware, async (c) => {
     default_owner_name: body.default_owner_name ?? null,
   })
   const user = await q.findUserById(c.env.DB, userIdVar)
-  return c.json({ user, org: user ? orgDomainFor(user.email) : null })
+  return c.json({ user, org: user ? orgDomainFor(user.email, parseExtraFreeMailDomains(c.env.EXTRA_FREE_MAIL_DOMAINS)) : null })
 })
 
 route.post('/auth/logout', sessionMiddleware, async (c) => {

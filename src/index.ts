@@ -14,6 +14,7 @@ type Bindings = {
   MAIL_FROM_NAME?: string
   CF_ACCESS_TEAM_DOMAIN: string
   CF_ACCESS_AUD: string
+  EXTRA_FREE_MAIL_DOMAINS?: string
 }
 
 const app = new Hono<{ Bindings: Bindings }>()
