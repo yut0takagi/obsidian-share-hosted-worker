@@ -17,7 +17,7 @@ function app() {
 let env: TestEnv
 const origFetch = globalThis.fetch
 beforeEach(() => {
-  env = makeEnv({ MAILCHANNELS_FROM: 'noreply@example.dev', MAILCHANNELS_FROM_NAME: 'Share' })
+  env = makeEnv({ RESEND_API_KEY: 'resend-test-key', MAIL_FROM: 'noreply@example.com', MAIL_FROM_NAME: 'Share' })
   globalThis.fetch = vi.fn().mockResolvedValue(new Response('ok', { status: 202 })) as any
 })
 afterEach(() => { globalThis.fetch = origFetch; vi.useRealTimers() })
@@ -66,6 +66,30 @@ describe('POST /auth/request-magic-link', () => {
     expect(res.status).toBe(200)
     expect(env.db.rows('SELECT * FROM magic_link_tokens')).toHaveLength(1)
     expect(globalThis.fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('sends through Resend, not the retired MailChannels free path', async () => {
+    await requestLink({ email: 'alice@example.com', callback: CALLBACK })
+    expect((globalThis.fetch as any).mock.calls[0][0]).toBe('https://api.resend.com/emails')
+  })
+
+  it('says which settings are missing when email is not configured', async () => {
+    env = makeEnv({})
+    const res = await requestLink({ email: 'alice@example.com', callback: CALLBACK })
+    expect(res.status).toBe(503)
+    const body = await res.json() as { error: string; missing: string[] }
+    expect(body.error).toBe('email_not_configured')
+    expect(body.missing).toEqual(['RESEND_API_KEY', 'MAIL_FROM'])
+    expect(env.db.rows('SELECT * FROM magic_link_tokens')).toHaveLength(0)
+    expect(globalThis.fetch).not.toHaveBeenCalled()
+  })
+
+  it('drops the token when sending fails, so a retry is not rate-limited', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValueOnce(new Response('down', { status: 500 })).mockResolvedValue(new Response('{}', { status: 200 })) as any
+    const first = await requestLink({ email: 'alice@example.com', callback: CALLBACK })
+    expect(first.status).toBe(502)
+    expect(env.db.rows('SELECT * FROM magic_link_tokens')).toHaveLength(0)
+    expect((await requestLink({ email: 'alice@example.com', callback: CALLBACK })).status).toBe(200)
   })
 
   it('sends at most one link per address every 5 minutes', async () => {

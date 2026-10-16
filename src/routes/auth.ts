@@ -2,18 +2,14 @@
 import { Hono } from 'hono'
 import * as q from '../db/queries'
 import { userId, sessionToken, magicToken } from '../db/nanoid'
-import { sendMagicLinkEmail } from '../email/mailchannels'
+import { resolveMailConfig, sendMagicLink, type MailEnv } from '../email/mailer'
 import { sessionMiddleware } from '../auth/sessionMiddleware'
 import { orgDomainFor } from '../auth/orgDomain'
 import { sessionExpiresAt, magicLinkRetryAfter } from '../auth/session'
 import { renderConfirmPage, renderMessagePage, VERIFY_PAGE_HEADERS } from '../auth/verifyPage'
 import { EMAIL_RE, normalizeEmail } from '../util/email'
 
-type Bindings = {
-  DB: D1Database
-  MAILCHANNELS_FROM: string
-  MAILCHANNELS_FROM_NAME: string
-}
+type Bindings = { DB: D1Database } & MailEnv
 
 const route = new Hono<{ Bindings: Bindings; Variables: { session: any; userId: string } }>()
 
@@ -30,6 +26,12 @@ route.post('/auth/request-magic-link', async (c) => {
   if (!callbackRaw || !CALLBACK_RE.test(callbackRaw)) return c.json({ error: 'invalid callback' }, 400)
   if (body.state !== undefined && (typeof body.state !== 'string' || !STATE_RE.test(body.state))) {
     return c.json({ error: 'invalid state' }, 400)
+  }
+
+  const mail = resolveMailConfig(c.env)
+  if (!mail.ok) {
+    console.error('[auth] sign-in email is not configured; missing:', mail.missing.join(', '))
+    return c.json({ error: 'email_not_configured', message: 'Sign-in email is not set up on this server yet.', missing: mail.missing }, 503)
   }
 
   const now = new Date()
@@ -56,15 +58,12 @@ route.post('/auth/request-magic-link', async (c) => {
   const verifyUrl = `${origin}/auth/verify?token=${encodeURIComponent(token)}`
 
   try {
-    await sendMagicLinkEmail({
-      to: email,
-      magicLink: verifyUrl,
-      fromAddress: c.env.MAILCHANNELS_FROM,
-      fromName: c.env.MAILCHANNELS_FROM_NAME,
-    })
+    await sendMagicLink(mail.config, { to: email, magicLink: verifyUrl })
   } catch (e: any) {
     console.error('[auth] mail send failed:', e?.message)
-    return c.json({ error: 'email send failed; try again later' }, 502)
+    // Nothing was delivered, so do not let this attempt count against the rate limit.
+    await q.deleteMagicToken(c.env.DB, token)
+    return c.json({ error: 'email_send_failed', message: 'Could not send the sign-in email. Try again later.' }, 502)
   }
 
   return c.json({ ok: true, message: 'Magic link sent' })

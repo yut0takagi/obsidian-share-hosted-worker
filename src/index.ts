@@ -8,8 +8,9 @@ import publicRoute from './routes/public'
 type Bindings = {
   R2: R2Bucket
   DB: D1Database
-  MAILCHANNELS_FROM: string
-  MAILCHANNELS_FROM_NAME: string
+  RESEND_API_KEY?: string
+  MAIL_FROM?: string
+  MAIL_FROM_NAME?: string
   CF_ACCESS_TEAM_DOMAIN: string
   CF_ACCESS_AUD: string
 }
