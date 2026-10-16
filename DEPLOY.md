@@ -160,3 +160,11 @@ reader to have the owner share again. To find them before deploying:
 4. Let those owners know; re-sharing from plugin 0.2.0 fixes the share.
 
 Delete `users.json` and `./notes` afterwards: they contain account emails and note titles.
+
+## Sessions of plugin 0.1.0 users
+
+Sessions now end after 30 days (sessions that existed before migration 0001 get 30 days from
+when it ran). Plugin 0.2.0 notices the `401`, signs out and asks to sign in again. Plugin
+0.1.0 does not: sharing fails with `401` while its settings still say "Signed in". Those
+users need to press **Sign out** in the plugin settings and sign in again, or update the
+plugin. Mention this when announcing the release.
