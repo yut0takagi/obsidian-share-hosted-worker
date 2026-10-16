@@ -6,6 +6,7 @@ import { isAllowed } from '../auth/audienceCheck'
 import { sharePageResponse } from '../render/sharePage'
 import { effectiveOrgDomain, parseExtraFreeMailDomains } from '../auth/orgDomain'
 import * as q from '../db/queries'
+import { renderMessagePage, VERIFY_PAGE_HEADERS } from '../auth/verifyPage'
 
 type Bindings = {
   R2: R2Bucket
@@ -35,7 +36,15 @@ route.get('/n/:uuid', async (c) => {
   let orgDomain = ''
   if (meta.mode === 'org') {
     const owner = await q.findUserById(c.env.DB, meta.owner_id)
-    orgDomain = effectiveOrgDomain(meta.org_domain, owner?.email ?? null, parseExtraFreeMailDomains(c.env.EXTRA_FREE_MAIL_DOMAINS)) ?? ''
+    const effective = effectiveOrgDomain(meta.org_domain, owner?.email ?? null, parseExtraFreeMailDomains(c.env.EXTRA_FREE_MAIL_DOMAINS))
+    if (!effective) {
+      // Shared by 0.1.0 for a domain the 0.2.0 rules no longer allow; say so instead of a bare 403.
+      return new Response(renderMessagePage(
+        'This share is no longer available',
+        'A security update turned off this org-wide share: org-wide shares now reach only the owner\'s own sign-in domain, and never public mail domains such as gmail.com. Ask the owner to share it again.',
+      ), { status: 403, headers: VERIFY_PAGE_HEADERS })
+    }
+    orgDomain = effective
   }
 
   if (!isAllowed({ mode: meta.mode, audience: meta.audience, org_domain: orgDomain }, claims.email)) {

@@ -85,4 +85,24 @@ describe('GET /n/:uuid in org mode', () => {
     seedNote('org4', { mode: 'org', org_domain: 'example.com', owner_id: userId })
     expect((await read('org4', 'carol@example.com')).status).toBe(403)
   })
+
+  it('tells readers when a share stopped working because of the 0.2.0 rules', async () => {
+    const { userId } = signIn(env, 'freemail-test-owner@gmail.com')
+    seedNote('org5', { mode: 'org', org_domain: 'gmail.com', owner_id: userId })
+    const res = await read('org5', 'freemail-test-reader@gmail.com')
+    expect(res.status).toBe(403)
+    expect(res.headers.get('Content-Type')).toContain('text/html')
+    const text = await res.text()
+    expect(text).toContain('security update')
+    expect(text).toContain('Ask the owner to share it again')
+  })
+
+  it('keeps the plain refusal for readers outside a valid org share', async () => {
+    const { userId } = signIn(env, 'owner@example.com')
+    seedNote('org6', { mode: 'org', org_domain: 'example.com', owner_id: userId })
+    const res = await read('org6', 'carol@example.net')
+    expect(res.status).toBe(403)
+    expect(await res.text()).not.toContain('security update')
+  })
 })
+

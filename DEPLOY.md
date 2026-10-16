@@ -89,3 +89,39 @@ crons = ["17 3 * * *"]   # daily at 03:17 UTC
 ```
 
 Then deploy. Without the trigger, expired notes stay in R2 and keep answering `410`.
+
+## Org-wide shares that stop opening
+
+0.1.0 stored whatever org domain the plugin sent. 0.2.0 opens an org-wide share only when
+its stored domain is the owner's own sign-in domain and not a free-mail domain (built-in
+list plus `EXTRA_FREE_MAIL_DOMAINS`). Other org shares answer `403` with a page asking the
+reader to have the owner share again. To find them before deploying:
+
+1. Export the users table (a read-only query):
+
+   ```bash
+   npx wrangler d1 execute share-hosted --remote --json \
+     --command "SELECT id, email FROM users" > users.json
+   ```
+
+2. Download the note metadata (`notes/*.json`) from R2 with any S3-compatible client and an
+   R2 API token, for example:
+
+   ```bash
+   aws s3 sync s3://share-hosted/notes ./notes --exclude "*" --include "*.json" \
+     --endpoint-url https://<ACCOUNT_ID>.r2.cloudflarestorage.com
+   ```
+
+3. List the affected shares (reads the local files only):
+
+   ```bash
+   node scripts/legacy-org-shares.mjs --notes ./notes --users users.json \
+     [--extra "<value of EXTRA_FREE_MAIL_DOMAINS>"]
+   ```
+
+   Output is tab-separated: `uuid`, owner email, stored domain, and the reason
+   (`free-mail domain`, `not the owner's sign-in domain`, `owner not found`).
+
+4. Let those owners know; re-sharing from plugin 0.2.0 fixes the share.
+
+Delete `users.json` and `./notes` afterwards: they contain account emails and note titles.
