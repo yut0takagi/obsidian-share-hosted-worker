@@ -9,4 +9,5 @@ export function nanoid(length: number): string {
 export const userId = () => `u_${nanoid(16)}`
 export const sessionToken = () => `s_${nanoid(32)}`
 export const magicToken = () => `m_${nanoid(24)}`
+export const authCode = () => `c_${nanoid(32)}`
 export const noteUuid = () => nanoid(12)

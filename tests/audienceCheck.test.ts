@@ -7,19 +7,19 @@ describe('isAllowed (multi-tenant: org_domain on note)', () => {
   })
 
   it('org mode: rejects when email differs', () => {
-    expect(isAllowed({ mode: 'org', audience: [], org_domain: 'example.com' }, 'alice@other.com')).toBe(false)
+    expect(isAllowed({ mode: 'org', audience: [], org_domain: 'example.com' }, 'alice@other.test')).toBe(false)
   })
 
   it('org mode: rejects when org_domain empty', () => {
-    expect(isAllowed({ mode: 'org', audience: [], org_domain: '' }, 'a@e.com')).toBe(false)
+    expect(isAllowed({ mode: 'org', audience: [], org_domain: '' }, 'a@e.test')).toBe(false)
   })
 
   it('list mode: matches case-insensitively', () => {
-    expect(isAllowed({ mode: 'list', audience: ['BOB@y.com'], org_domain: '' }, 'bob@y.com')).toBe(true)
+    expect(isAllowed({ mode: 'list', audience: ['BOB@y.test'], org_domain: '' }, 'bob@y.test')).toBe(true)
   })
 
   it('list mode: rejects unknown emails', () => {
-    expect(isAllowed({ mode: 'list', audience: ['alice@x.com'], org_domain: '' }, 'eve@x.com')).toBe(false)
+    expect(isAllowed({ mode: 'list', audience: ['alice@x.test'], org_domain: '' }, 'eve@x.test')).toBe(false)
   })
 
   it('public mode: always passes', () => {
