@@ -133,3 +133,17 @@ describe('GET /a/:filename', () => {
     expect(res.status).toBe(404)
   })
 })
+
+describe('POST /api/asset: size limit before reading the body', () => {
+  it('answers 413 from Content-Length alone', async () => {
+    const { MAX_ASSET_BYTES } = await import('../../src/assets')
+    const hash = (await sha256Hex(PNG)).slice(0, 32)
+    const res = await app().request(`/api/asset?hash=${hash}&ext=png`, {
+      method: 'POST',
+      headers: { ...bearer(token), 'Content-Length': String(MAX_ASSET_BYTES + 1) },
+      body: PNG,
+    }, env, makeCtx())
+    expect(res.status).toBe(413)
+    expect(env.r2.objects.size).toBe(0)
+  })
+})

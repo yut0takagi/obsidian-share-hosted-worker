@@ -191,3 +191,21 @@ describe('GET /api/share/:uuid', () => {
     expect((await app().request('/api/share/abcdefghijkl', {}, env, makeCtx())).status).toBe(401)
   })
 })
+
+describe('POST /api/share: size limits', () => {
+  it('answers 413 from Content-Length before reading the body', async () => {
+    const { MAX_SHARE_REQUEST_BYTES } = await import('../../src/share/request')
+    const res = await app().request('/api/share', {
+      method: 'POST',
+      headers: { ...bearer(alice.token), 'Content-Type': 'application/json', 'Content-Length': String(MAX_SHARE_REQUEST_BYTES + 1) },
+      body: JSON.stringify(body()),
+    }, env, makeCtx())
+    expect(res.status).toBe(413)
+  })
+
+  it('answers 413 when the HTML itself is over the limit', async () => {
+    const { MAX_HTML_BYTES } = await import('../../src/share/request')
+    const res = await share(alice.token, body({ html: 'x'.repeat(MAX_HTML_BYTES + 1) }))
+    expect(res.status).toBe(413)
+  })
+})

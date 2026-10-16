@@ -14,11 +14,13 @@ export interface ParsedShareRequest {
 }
 
 export const MAX_HTML_BYTES = 5 * 1024 * 1024
+// JSON escaping can grow the HTML, so the request as a whole may be somewhat larger.
+export const MAX_SHARE_REQUEST_BYTES = 2 * MAX_HTML_BYTES + 64 * 1024
 const MAX_AUDIENCE = 200
 const UUID_RE = /^[A-Za-z0-9_-]{8,64}$/
 const MODES: ShareMode[] = ['org', 'list', 'public']
 
-type Result = { ok: true; value: ParsedShareRequest } | { ok: false; error: string }
+type Result = { ok: true; value: ParsedShareRequest } | { ok: false; error: string; status?: 413 }
 
 function str(v: unknown, max: number): string | null {
   if (v === undefined || v === null) return ''
@@ -60,7 +62,7 @@ export function parseShareRequest(raw: unknown): Result {
   }
 
   if (typeof b.html !== 'string' || b.html.length === 0) return { ok: false, error: 'html required' }
-  if (new TextEncoder().encode(b.html).byteLength > MAX_HTML_BYTES) return { ok: false, error: 'html too large' }
+  if (new TextEncoder().encode(b.html).byteLength > MAX_HTML_BYTES) return { ok: false, error: 'html too large', status: 413 }
 
   const org_domain = b.org_domain === undefined || b.org_domain === null ? null : str(b.org_domain, 253)
   if (org_domain === null && b.org_domain != null) return { ok: false, error: 'invalid org_domain' }

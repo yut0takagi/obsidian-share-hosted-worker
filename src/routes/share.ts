@@ -5,7 +5,8 @@ import { recordNoteAssets, removeNote } from '../assetRefs'
 import { sessionMiddleware } from '../auth/sessionMiddleware'
 import { noteUuid } from '../db/nanoid'
 import * as q from '../db/queries'
-import { parseShareRequest } from '../share/request'
+import { parseShareRequest, MAX_SHARE_REQUEST_BYTES } from '../share/request'
+import { declaredTooLarge } from '../util/bodySize'
 import { orgDomainFor } from '../auth/orgDomain'
 import type { NoteMeta, ShareResponse } from '../types'
 
@@ -23,10 +24,11 @@ async function freshUuid(r2: R2Bucket): Promise<string> {
 }
 
 route.post('/api/share', sessionMiddleware, async (c) => {
+  if (declaredTooLarge(c.req.header('Content-Length'), MAX_SHARE_REQUEST_BYTES)) return c.json({ error: 'request too large' }, 413)
   let raw: unknown
   try { raw = await c.req.json() } catch { return c.json({ error: 'invalid json' }, 400) }
   const parsed = parseShareRequest(raw)
-  if (!parsed.ok) return c.json({ error: parsed.error }, 400)
+  if (!parsed.ok) return c.json({ error: parsed.error }, parsed.status ?? 400)
   const req = parsed.value
 
   const now = new Date().toISOString()

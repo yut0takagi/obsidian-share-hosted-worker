@@ -2,7 +2,8 @@
 import { Hono } from 'hono'
 import { sessionMiddleware } from '../auth/sessionMiddleware'
 import { putAsset, getAsset, headAsset } from '../r2'
-import { checkAssetUpload, parseAssetFilename, ASSET_CSP } from '../assets'
+import { checkAssetUpload, parseAssetFilename, ASSET_CSP, MAX_ASSET_BYTES } from '../assets'
+import { declaredTooLarge } from '../util/bodySize'
 import { claimAsset } from '../assetRefs'
 
 type Bindings = { R2: R2Bucket; DB: D1Database }
@@ -11,6 +12,7 @@ type Vars = { session: any; userId: string }
 const route = new Hono<{ Bindings: Bindings; Variables: Vars }>()
 
 route.post('/api/asset', sessionMiddleware, async (c) => {
+  if (declaredTooLarge(c.req.header('Content-Length'), MAX_ASSET_BYTES)) return c.text('Payload Too Large: asset too large', 413)
   const body = await c.req.arrayBuffer()
   const check = await checkAssetUpload(c.req.query('hash'), c.req.query('ext'), body)
   if (!check.ok) return c.text(`Bad Request: ${check.error}`, check.status)
