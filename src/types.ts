@@ -45,6 +45,7 @@ export interface Session {
   created_at: string
   last_used_at: string | null
   name: string | null
+  expires_at: string | null
 }
 
 export interface MagicLinkToken {

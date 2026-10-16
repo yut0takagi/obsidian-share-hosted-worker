@@ -54,7 +54,7 @@ describe('queries', () => {
   })
 
   it('creates+finds+deletes session', async () => {
-    await q.createSession(db, { token: 's_xyz', user_id: 'u_abc', created_at: '2026-05-30T00:00:00Z', name: 'Obsidian' })
+    await q.createSession(db, { token: 's_xyz', user_id: 'u_abc', created_at: '2026-05-30T00:00:00Z', name: 'Obsidian', expires_at: '2026-06-29T00:00:00Z' })
     expect((await q.findSessionByToken(db, 's_xyz'))?.user_id).toBe('u_abc')
     await q.deleteSession(db, 's_xyz')
     expect(await q.findSessionByToken(db, 's_xyz')).toBeNull()
