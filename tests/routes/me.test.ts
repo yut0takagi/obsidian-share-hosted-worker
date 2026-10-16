@@ -20,7 +20,7 @@ describe('GET /auth/me', () => {
 
   it('reports org sharing as unavailable for free mail', async () => {
     const env = makeEnv()
-    const { token } = signIn(env, 'gina@gmail.com')
+    const { token } = signIn(env, 'freemail-test-user@gmail.com')
     const res = await app().request('/auth/me', { headers: bearer(token) }, env, makeCtx())
     expect(await res.json()).toMatchObject({ org: { domain: 'gmail.com', available: false } })
   })

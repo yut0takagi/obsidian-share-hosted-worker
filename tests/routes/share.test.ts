@@ -148,15 +148,15 @@ describe('POST /api/share: org mode follows the sign-in domain', () => {
   })
 
   it('refuses org mode for free-mail accounts', async () => {
-    const gina = signIn(env, 'gina@gmail.com')
-    const res = await share(gina.token, body({ mode: 'org', audience: [] }))
+    const freemailUser = signIn(env, 'freemail-test-user@gmail.com')
+    const res = await share(freemailUser.token, body({ mode: 'org', audience: [] }))
     expect(res.status).toBe(400)
     expect(await res.json()).toMatchObject({ error: 'org_mode_unavailable' })
   })
 
   it('still lets free-mail accounts share with specific people', async () => {
-    const gina = signIn(env, 'gina@gmail.com')
-    expect((await share(gina.token, body({ mode: 'list' }))).status).toBe(200)
+    const freemailUser = signIn(env, 'freemail-test-user@gmail.com')
+    expect((await share(freemailUser.token, body({ mode: 'list' }))).status).toBe(200)
   })
 })
 

@@ -37,19 +37,19 @@ describe('queries', () => {
   beforeEach(() => { db = new FakeD1() })
 
   it('creates+finds user by email', async () => {
-    await q.createUser(db, { id: 'u_abc', email: 'a@b.com', created_at: '2026-05-30T00:00:00Z', default_org_domain: null, default_owner_name: null })
-    expect((await q.findUserByEmail(db, 'a@b.com'))?.id).toBe('u_abc')
+    await q.createUser(db, { id: 'u_abc', email: 'a@b.test', created_at: '2026-05-30T00:00:00Z', default_org_domain: null, default_owner_name: null })
+    expect((await q.findUserByEmail(db, 'a@b.test'))?.id).toBe('u_abc')
   })
 
   it('returns null for unknown email', async () => {
-    expect(await q.findUserByEmail(db, 'no@x.com')).toBeNull()
+    expect(await q.findUserByEmail(db, 'no@x.test')).toBeNull()
   })
 
   it('updates user profile', async () => {
-    await q.createUser(db, { id: 'u_abc', email: 'a@b.com', created_at: '2026-05-30T00:00:00Z', default_org_domain: null, default_owner_name: null })
-    await q.updateUserProfile(db, 'u_abc', { default_org_domain: 'x.com', default_owner_name: 'Alice' })
+    await q.createUser(db, { id: 'u_abc', email: 'a@b.test', created_at: '2026-05-30T00:00:00Z', default_org_domain: null, default_owner_name: null })
+    await q.updateUserProfile(db, 'u_abc', { default_org_domain: 'x.test', default_owner_name: 'Alice' })
     const u = await q.findUserById(db, 'u_abc')
-    expect(u?.default_org_domain).toBe('x.com')
+    expect(u?.default_org_domain).toBe('x.test')
     expect(u?.default_owner_name).toBe('Alice')
   })
 
@@ -61,8 +61,8 @@ describe('queries', () => {
   })
 
   it('creates+consumes magic token', async () => {
-    await q.createMagicToken(db, { token: 'm_abc', email: 'a@b.com', callback: 'obsidian://x', created_at: '2026-05-30T00:00:00Z', expires_at: '2026-05-30T00:15:00Z' })
-    expect((await q.findMagicToken(db, 'm_abc'))?.email).toBe('a@b.com')
+    await q.createMagicToken(db, { token: 'm_abc', email: 'a@b.test', callback: 'obsidian://x', created_at: '2026-05-30T00:00:00Z', expires_at: '2026-05-30T00:15:00Z' })
+    expect((await q.findMagicToken(db, 'm_abc'))?.email).toBe('a@b.test')
     await q.consumeMagicToken(db, 'm_abc', '2026-05-30T00:05:00Z')
     expect((await q.findMagicToken(db, 'm_abc'))?.used_at).toBe('2026-05-30T00:05:00Z')
   })

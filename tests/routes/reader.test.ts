@@ -68,14 +68,14 @@ describe('GET /n/:uuid in org mode', () => {
   })
 
   it('refuses notes stored for a free-mail domain before 0.2.0', async () => {
-    const { userId } = signIn(env, 'owner@gmail.com')
+    const { userId } = signIn(env, 'freemail-test-owner@gmail.com')
     seedNote('org2', { mode: 'org', org_domain: 'gmail.com', owner_id: userId })
-    expect((await read('org2', 'anyone@gmail.com')).status).toBe(403)
+    expect((await read('org2', 'freemail-test-reader@gmail.com')).status).toBe(403)
   })
 
   it('refuses notes whose stored domain is not the owner domain', async () => {
     const { userId } = signIn(env, 'owner@example.com')
-    seedNote('org3', { mode: 'org', org_domain: 'other.com', owner_id: userId })
-    expect((await read('org3', 'dave@other.com')).status).toBe(403)
+    seedNote('org3', { mode: 'org', org_domain: 'other.test', owner_id: userId })
+    expect((await read('org3', 'dave@other.test')).status).toBe(403)
   })
 })

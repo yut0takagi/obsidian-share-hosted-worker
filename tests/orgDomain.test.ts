@@ -24,7 +24,7 @@ describe('orgDomainFor', () => {
     expect(orgDomainFor('alice@example.com')).toEqual({ domain: 'example.com', available: true })
   })
   it('marks free mail as unavailable', () => {
-    expect(orgDomainFor('alice@gmail.com')).toEqual({ domain: 'gmail.com', available: false })
+    expect(orgDomainFor('freemail-test-user@gmail.com')).toEqual({ domain: 'gmail.com', available: false })
   })
 })
 
@@ -33,10 +33,10 @@ describe('effectiveOrgDomain (read time, for notes stored before 0.2.0)', () => 
     expect(effectiveOrgDomain('example.com', 'alice@example.com')).toBe('example.com')
   })
   it('fails closed when the stored domain differs from the owner domain', () => {
-    expect(effectiveOrgDomain('other.com', 'alice@example.com')).toBeNull()
+    expect(effectiveOrgDomain('other.test', 'alice@example.com')).toBeNull()
   })
   it('fails closed for free-mail owners', () => {
-    expect(effectiveOrgDomain('gmail.com', 'alice@gmail.com')).toBeNull()
+    expect(effectiveOrgDomain('gmail.com', 'freemail-test-user@gmail.com')).toBeNull()
   })
   it('fails closed without an owner', () => {
     expect(effectiveOrgDomain('example.com', null)).toBeNull()
